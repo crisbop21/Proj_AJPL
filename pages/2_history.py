@@ -53,7 +53,8 @@ for session in sessions:
 # --- Generar PDF ---
 if st.button("Generar Reporte PDF"):
     try:
-        pdf_bytes = generate_pdf(selected_name, sessions)
+        with st.spinner("Generando reporte PDF..."):
+            pdf_bytes = generate_pdf(selected_name, sessions)
         st.download_button(
             label="Descargar PDF",
             data=pdf_bytes,
