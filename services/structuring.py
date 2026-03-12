@@ -1,4 +1,5 @@
 import json
+import re
 import streamlit as st
 import anthropic
 
@@ -17,6 +18,17 @@ Devuelve ÚNICAMENTE un objeto JSON válido con estas claves exactas:
 Sin texto fuera del JSON. Sin bloques de código. Solo el objeto JSON. Todo en español."""
 
 
+def _extract_json(text: str) -> dict:
+    """Extract and parse JSON from Claude's response, handling markdown code blocks."""
+    # Strip whitespace
+    cleaned = text.strip()
+    # Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, re.DOTALL)
+    if match:
+        cleaned = match.group(1).strip()
+    return json.loads(cleaned)
+
+
 def structure_notes(transcript: str) -> dict:
     """Estructura la transcripción en los 7 campos de coaching usando Claude."""
     try:
@@ -28,19 +40,19 @@ def structure_notes(transcript: str) -> dict:
             messages=[{"role": "user", "content": transcript}],
         )
         text = response.content[0].text
-        return json.loads(text)
+        return _extract_json(text)
     except json.JSONDecodeError:
         # Retry asking Claude to fix the JSON
         try:
             retry_response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
-                system="Devuelve ÚNICAMENTE un objeto JSON válido. Sin texto adicional.",
+                system="Devuelve ÚNICAMENTE un objeto JSON válido. Sin texto adicional. Sin bloques de código.",
                 messages=[
                     {"role": "user", "content": f"Corrige este JSON:\n{text}"},
                 ],
             )
-            return json.loads(retry_response.content[0].text)
+            return _extract_json(retry_response.content[0].text)
         except Exception as retry_err:
             st.error(f"Error al procesar la respuesta de Claude: {retry_err}")
             raise
