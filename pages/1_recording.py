@@ -2,7 +2,7 @@ import tempfile
 import os
 import streamlit as st
 from pydub import AudioSegment
-from audiorecorder import audiorecorder
+from io import BytesIO
 from services.database import get_all_clients, save_session
 from services.transcription import transcribe_audio
 from services.structuring import structure_notes
@@ -21,19 +21,18 @@ selected_client_id = client_options[selected_name]
 
 # --- Grabar audio ---
 st.subheader("Grabar nota de voz")
-audio = audiorecorder("Grabar", "Detener grabación")
+audio_data = st.audio_input("Pulsa para grabar tu nota de voz")
 
-if len(audio) > 0:
-    st.audio(audio.export().read(), format="audio/wav")
-
+if audio_data is not None:
     if st.button("Transcribir y estructurar"):
         # Export audio to temp WAV file
         tmp_path = None
         try:
             with st.spinner("Exportando audio..."):
+                audio_segment = AudioSegment.from_file(BytesIO(audio_data.read()))
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                     tmp_path = tmp.name
-                    audio.export(tmp.name, format="wav")
+                    audio_segment.export(tmp.name, format="wav")
 
             # Transcribe
             with st.spinner("Transcribiendo audio..."):
