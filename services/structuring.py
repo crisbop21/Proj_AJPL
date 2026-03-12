@@ -41,9 +41,9 @@ def structure_notes(transcript: str) -> dict:
                 ],
             )
             return json.loads(retry_response.content[0].text)
-        except Exception:
-            st.error("Error al procesar la respuesta de Claude. Intenta de nuevo.")
+        except Exception as retry_err:
+            st.error(f"Error al procesar la respuesta de Claude: {retry_err}")
             raise
     except Exception as e:
-        st.error("Error al estructurar las notas. Por favor intenta de nuevo.")
+        st.error(f"Error al estructurar las notas: {e}")
         raise

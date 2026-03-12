@@ -37,12 +37,18 @@ if audio_data is not None:
             # Transcribe
             with st.spinner("Transcribiendo audio..."):
                 transcript = transcribe_audio(tmp_path)
-        except Exception:
-            st.error("Error al transcribir el audio. Por favor intenta de nuevo.")
+        except Exception as e:
+            st.error(f"Error al transcribir el audio: {e}")
             st.stop()
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
+
+        # Validate transcript is not empty or meaningless
+        cleaned = transcript.strip().strip("[]").strip()
+        if not cleaned or cleaned.lower() in ("silencio", "silence", "..."):
+            st.warning("La transcripción está vacía o solo contiene silencio. Graba una nota de voz más larga.")
+            st.stop()
 
         # Store transcript in session state so it persists
         st.session_state["current_transcript"] = transcript
@@ -61,8 +67,8 @@ if audio_data is not None:
             with st.spinner("Estructurando notas con IA..."):
                 try:
                     summary = structure_notes(edited_transcript)
-                except Exception:
-                    st.error("Error al estructurar las notas. Por favor intenta de nuevo.")
+                except Exception as e:
+                    st.error(f"Error al estructurar las notas: {e}")
                     st.stop()
             st.session_state["pending_summary"] = summary
             st.session_state["pending_transcript"] = edited_transcript
