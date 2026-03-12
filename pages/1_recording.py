@@ -30,33 +30,46 @@ if len(audio) > 0:
         # Export audio to temp WAV file
         tmp_path = None
         try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp_path = tmp.name
-                audio.export(tmp.name, format="wav")
+            with st.spinner("Exportando audio..."):
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp_path = tmp.name
+                    audio.export(tmp.name, format="wav")
 
             # Transcribe
             with st.spinner("Transcribiendo audio..."):
                 transcript = transcribe_audio(tmp_path)
         except Exception:
+            st.error("Error al transcribir el audio. Por favor intenta de nuevo.")
             st.stop()
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-        # Show editable transcript
+        # Store transcript in session state so it persists
+        st.session_state["current_transcript"] = transcript
+
+    # Show editable transcript if available
+    if "current_transcript" in st.session_state:
         st.subheader("Transcripción")
         edited_transcript = st.text_area(
             "Puedes editar la transcripción antes de estructurar:",
-            value=transcript,
+            value=st.session_state["current_transcript"],
             height=200,
         )
 
-        # Structure notes
-        with st.spinner("Estructurando notas con IA..."):
-            try:
-                summary = structure_notes(edited_transcript)
-            except Exception:
-                st.stop()
+        # Structure notes if not already done
+        if "pending_summary" not in st.session_state:
+            with st.spinner("Estructurando notas con IA..."):
+                try:
+                    summary = structure_notes(edited_transcript)
+                except Exception:
+                    st.error("Error al estructurar las notas. Por favor intenta de nuevo.")
+                    st.stop()
+            st.session_state["pending_summary"] = summary
+            st.session_state["pending_transcript"] = edited_transcript
+            st.session_state["pending_client_id"] = selected_client_id
+
+        summary = st.session_state["pending_summary"]
 
         # Display structured summary
         st.subheader("Resumen Estructurado")
@@ -79,23 +92,19 @@ if len(audio) > 0:
                 else:
                     st.write(value)
 
-        # Save to database
-        st.session_state["pending_transcript"] = edited_transcript
-        st.session_state["pending_summary"] = summary
-        st.session_state["pending_client_id"] = selected_client_id
-
-# Save button (outside the transcription block to persist after rerun)
-if "pending_summary" in st.session_state:
-    if st.button("Guardar sesión"):
-        try:
-            save_session(
-                st.session_state["pending_client_id"],
-                st.session_state["pending_transcript"],
-                st.session_state["pending_summary"],
-            )
-            st.success("Sesión guardada correctamente.")
-            del st.session_state["pending_transcript"]
-            del st.session_state["pending_summary"]
-            del st.session_state["pending_client_id"]
-        except Exception:
-            pass  # Error already shown by save_session
+        # Save button
+        if st.button("Guardar sesión"):
+            try:
+                with st.spinner("Guardando sesión..."):
+                    save_session(
+                        st.session_state["pending_client_id"],
+                        st.session_state["pending_transcript"],
+                        st.session_state["pending_summary"],
+                    )
+                st.success("Sesión guardada correctamente.")
+                del st.session_state["current_transcript"]
+                del st.session_state["pending_transcript"]
+                del st.session_state["pending_summary"]
+                del st.session_state["pending_client_id"]
+            except Exception:
+                pass  # Error already shown by save_session
