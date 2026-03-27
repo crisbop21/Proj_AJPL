@@ -56,6 +56,10 @@ def structure_notes(transcript: str) -> dict:
         except Exception as retry_err:
             st.error(f"Error al procesar la respuesta de Claude: {retry_err}")
             raise
+    except anthropic.AuthenticationError:
+        st.error("Error al estructurar las notas: La clave API de Anthropic es inválida. "
+                 "Por favor verifica tu ANTHROPIC_API_KEY en la configuración de secrets.")
+        raise
     except Exception as e:
-        st.error(f"Error al estructurar las notas: {e}")
+        st.error(f"Error al estructurar las notas. Por favor intenta de nuevo.")
         raise
