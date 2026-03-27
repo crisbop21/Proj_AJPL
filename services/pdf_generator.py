@@ -29,8 +29,11 @@ def _register_fonts() -> str:
     return "Helvetica"
 
 
-def _generate_resumen_general(sessions: list[dict]) -> str:
-    """Genera un resumen general de todas las sesiones usando Claude."""
+def generate_resumen_general(sessions: list[dict], feedback: str = "") -> str:
+    """Genera un resumen general de todas las sesiones usando Claude.
+
+    If feedback is provided, it is included as additional instructions to refine the summary.
+    """
     summaries_text = ""
     for s in sessions:
         summary = s.get("structured_summary", {})
@@ -41,12 +44,16 @@ def _generate_resumen_general(sessions: list[dict]) -> str:
         summaries_text += f"  Avances: {', '.join(summary.get('avances_y_revelaciones', []))}\n"
         summaries_text += f"  Compromisos: {', '.join(summary.get('compromisos_del_cliente', []))}\n\n"
 
+    system_prompt = "Eres un asistente para una coach de vida. Genera un resumen general breve (2-3 parrafos) del progreso del cliente basandote en todas sus sesiones. Todo en espanol."
+    if feedback:
+        system_prompt += f"\n\nLa coach ha dado el siguiente feedback sobre el resumen anterior. Ajusta el resumen segun estas indicaciones:\n{feedback}"
+
     try:
         client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
-            system="Eres un asistente para una coach de vida. Genera un resumen general breve (2-3 parrafos) del progreso del cliente basandote en todas sus sesiones. Todo en espanol.",
+            system=system_prompt,
             messages=[{"role": "user", "content": summaries_text}],
         )
         return response.content[0].text
@@ -60,7 +67,7 @@ def _safe(text: str) -> str:
     return escape(str(text))
 
 
-def generate_pdf(client_name: str, sessions: list[dict]) -> bytes:
+def generate_pdf(client_name: str, sessions: list[dict], resumen_general: str = "") -> bytes:
     """Genera un reporte PDF con el historial de sesiones del cliente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -93,7 +100,8 @@ def generate_pdf(client_name: str, sessions: list[dict]) -> bytes:
 
     # Resumen general
     story.append(Paragraph("Resumen General", heading_style))
-    resumen_general = _generate_resumen_general(sessions)
+    if not resumen_general:
+        resumen_general = generate_resumen_general(sessions)
     for paragraph in resumen_general.split("\n"):
         if paragraph.strip():
             story.append(Paragraph(_safe(paragraph.strip()), body_style))

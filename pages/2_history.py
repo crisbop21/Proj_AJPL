@@ -1,6 +1,6 @@
 import streamlit as st
 from services.database import get_all_clients, get_sessions_for_client
-from services.pdf_generator import generate_pdf
+from services.pdf_generator import generate_pdf, generate_resumen_general
 from services.styles import inject_custom_css, render_sidebar_brand, page_header, metric_card
 
 inject_custom_css()
@@ -47,22 +47,78 @@ with col3:
 
 st.markdown("")
 
-# --- PDF generation at top for easy access ---
+# --- PDF generation with preview and feedback ---
 col_pdf, col_spacer = st.columns([1, 2])
 with col_pdf:
     if st.button("📄 Generar Reporte PDF", type="primary", use_container_width=True):
         try:
-            with st.spinner("Generando reporte PDF..."):
-                pdf_bytes = generate_pdf(selected_name, sessions)
-            st.download_button(
-                label="⬇️ Descargar PDF",
-                data=pdf_bytes,
-                file_name=f"reporte_{selected_name.replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+            with st.spinner("Generando resumen general..."):
+                resumen = generate_resumen_general(sessions)
+            st.session_state["report_resumen"] = resumen
+            st.session_state["report_client"] = selected_name
+            st.session_state["report_sessions"] = sessions
+            st.session_state["report_pdf"] = None
+            st.rerun()
         except Exception:
-            st.error("Error al generar el PDF. Por favor intenta de nuevo.")
+            st.error("Error al generar el resumen. Por favor intenta de nuevo.")
+
+# Show preview if a resumen has been generated for this client
+if (st.session_state.get("report_resumen")
+        and st.session_state.get("report_client") == selected_name):
+    st.markdown("---")
+    st.subheader("📋 Vista previa del Resumen General")
+    st.markdown(st.session_state["report_resumen"])
+
+    feedback = st.text_area(
+        "¿Tienes algún comentario o corrección? (opcional)",
+        placeholder="Ej: Enfatizar más los avances en autoestima, omitir detalles sobre...",
+        key="report_feedback",
+    )
+
+    col_approve, col_regenerate, col_cancel = st.columns(3)
+    with col_approve:
+        if st.button("✅ Aprobar y generar PDF", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Generando PDF final..."):
+                    pdf_bytes = generate_pdf(
+                        selected_name,
+                        st.session_state["report_sessions"],
+                        resumen_general=st.session_state["report_resumen"],
+                    )
+                st.session_state["report_pdf"] = pdf_bytes
+            except Exception:
+                st.error("Error al generar el PDF. Por favor intenta de nuevo.")
+
+    with col_regenerate:
+        if st.button("🔄 Regenerar con feedback", use_container_width=True):
+            if not feedback:
+                st.warning("Escribe tu feedback antes de regenerar.")
+            else:
+                try:
+                    with st.spinner("Regenerando resumen con tu feedback..."):
+                        new_resumen = generate_resumen_general(
+                            st.session_state["report_sessions"],
+                            feedback=feedback,
+                        )
+                    st.session_state["report_resumen"] = new_resumen
+                    st.rerun()
+                except Exception:
+                    st.error("Error al regenerar el resumen. Por favor intenta de nuevo.")
+
+    with col_cancel:
+        if st.button("❌ Cancelar", use_container_width=True):
+            for key in ["report_resumen", "report_client", "report_sessions", "report_pdf"]:
+                st.session_state.pop(key, None)
+            st.rerun()
+
+    # Show download button if PDF was generated
+    if st.session_state.get("report_pdf"):
+        st.download_button(
+            label="⬇️ Descargar PDF",
+            data=st.session_state["report_pdf"],
+            file_name=f"reporte_{selected_name.replace(' ', '_')}.pdf",
+            mime="application/pdf",
+        )
 
 st.divider()
 
