@@ -52,6 +52,19 @@ def save_session(client_id: str, transcript: str, summary: dict) -> None:
         raise
 
 
+def update_session(session_id: str, transcript: str, summary: dict) -> None:
+    """Actualiza la transcripción y el resumen estructurado de una sesión existente."""
+    try:
+        supabase = _get_client()
+        supabase.table("sessions").update({
+            "raw_transcript": transcript,
+            "structured_summary": summary,
+        }).eq("id", session_id).execute()
+    except Exception as e:
+        st.error("Error al actualizar la sesión. Por favor intenta de nuevo.")
+        raise
+
+
 def get_sessions_for_client(client_id: str) -> list[dict]:
     """Obtiene todas las sesiones de un cliente en orden cronológico."""
     try:

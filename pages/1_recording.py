@@ -4,7 +4,12 @@ import streamlit as st
 from pydub import AudioSegment
 from io import BytesIO
 from services.auth import check_password
-from services.database import get_all_clients, save_session
+from services.database import (
+    get_all_clients,
+    save_session,
+    update_session,
+    get_sessions_for_client,
+)
 from services.transcription import transcribe_audio
 from services.structuring import structure_notes
 from services.styles import inject_custom_css, render_sidebar_brand, step_indicator, page_header
@@ -27,6 +32,30 @@ client_options = {c["name"]: c["id"] for c in clients}
 has_transcript = "current_transcript" in st.session_state
 has_summary = "pending_summary" in st.session_state
 
+# --- Mode selector: new session vs. append to existing ---
+mode = st.radio(
+    "¿Qué deseas hacer?",
+    ["Nueva sesión", "Añadir a sesión existente"],
+    horizontal=True,
+    key="recording_mode",
+)
+is_append_mode = mode == "Añadir a sesión existente"
+
+# Clear pending state if mode changes
+if st.session_state.get("_last_mode") != mode:
+    for key in [
+        "current_transcript",
+        "pending_transcript",
+        "pending_summary",
+        "pending_client_id",
+        "pending_session_id",
+        "pending_existing_transcript",
+    ]:
+        st.session_state.pop(key, None)
+    st.session_state["_last_mode"] = mode
+    has_transcript = False
+    has_summary = False
+
 # --- Step 1: Client selection ---
 step_indicator(1, "Seleccionar cliente", done=has_transcript)
 selected_name = st.selectbox(
@@ -37,14 +66,44 @@ selected_name = st.selectbox(
 )
 selected_client_id = client_options[selected_name]
 
+# --- Step 1b (append mode): Select existing session ---
+selected_session = None
+if is_append_mode:
+    st.markdown("")
+    step_indicator(2, "Seleccionar sesión existente", done=has_transcript)
+    existing_sessions = get_sessions_for_client(selected_client_id)
+    if not existing_sessions:
+        st.info("Este cliente no tiene sesiones registradas. Cambia a **Nueva sesión** para crear la primera.")
+        st.stop()
+
+    session_labels = {
+        f"Sesión {s.get('session_number', '?')} — {s.get('recorded_at', '')[:10]}": s
+        for s in existing_sessions
+    }
+    selected_label = st.selectbox(
+        "Sesión",
+        list(session_labels.keys()),
+        label_visibility="collapsed",
+        placeholder="Elige una sesión...",
+    )
+    selected_session = session_labels[selected_label]
+
+    with st.expander("Ver transcripción actual de la sesión", expanded=False):
+        st.text(selected_session.get("raw_transcript", "") or "(vacía)")
+
 st.markdown("")
 
-# --- Step 2: Record audio ---
-step_indicator(2, "Grabar nota de voz", done=has_transcript)
+# --- Record audio step ---
+record_step_num = 3 if is_append_mode else 2
+record_label = "Grabar nota adicional" if is_append_mode else "Grabar nota de voz"
+step_indicator(record_step_num, record_label, done=has_transcript)
 audio_data = st.audio_input("Pulsa para grabar tu nota de voz")
 
 if audio_data is not None:
-    if st.button("Transcribir y estructurar", type="primary", use_container_width=True):
+    button_label = (
+        "Transcribir y añadir a la sesión" if is_append_mode else "Transcribir y estructurar"
+    )
+    if st.button(button_label, type="primary", use_container_width=True):
         # Export audio to temp WAV file
         tmp_path = None
         try:
@@ -56,7 +115,7 @@ if audio_data is not None:
 
             # Transcribe
             with st.spinner("Transcribiendo audio..."):
-                transcript = transcribe_audio(tmp_path)
+                new_transcript = transcribe_audio(tmp_path)
         except Exception:
             st.error("Error al transcribir el audio. Por favor intenta de nuevo.")
             st.stop()
@@ -65,23 +124,39 @@ if audio_data is not None:
                 os.remove(tmp_path)
 
         # Validate transcript is not empty or meaningless
-        cleaned = transcript.strip().strip("[]").strip()
+        cleaned = new_transcript.strip().strip("[]").strip()
         if not cleaned or cleaned.lower() in ("silencio", "silence", "..."):
             st.warning("La transcripción está vacía o solo contiene silencio. Graba una nota de voz más larga.")
             st.stop()
 
-        # Store transcript in session state so it persists
-        st.session_state["current_transcript"] = transcript
+        # In append mode, concatenate with existing transcript
+        if is_append_mode and selected_session is not None:
+            existing_text = (selected_session.get("raw_transcript") or "").strip()
+            combined = (
+                f"{existing_text}\n\n[Adición]\n{new_transcript}"
+                if existing_text
+                else new_transcript
+            )
+            st.session_state["current_transcript"] = combined
+            st.session_state["pending_session_id"] = selected_session["id"]
+            st.session_state["pending_existing_transcript"] = existing_text
+        else:
+            st.session_state["current_transcript"] = new_transcript
+            st.session_state.pop("pending_session_id", None)
+            st.session_state.pop("pending_existing_transcript", None)
 
 # Show editable transcript if available
 if "current_transcript" in st.session_state:
+    review_step_num = 4 if is_append_mode else 3
+    summary_step_num = 5 if is_append_mode else 4
+
     st.markdown("")
-    step_indicator(3, "Revisar transcripción", done=has_summary)
+    step_indicator(review_step_num, "Revisar transcripción", done=has_summary)
 
     edited_transcript = st.text_area(
         "Puedes editar la transcripción antes de guardar:",
         value=st.session_state["current_transcript"],
-        height=180,
+        height=220 if is_append_mode else 180,
     )
 
     # Structure notes if not already done
@@ -97,9 +172,9 @@ if "current_transcript" in st.session_state:
 
     summary = st.session_state["pending_summary"]
 
-    # --- Step 4: Structured summary ---
+    # --- Structured summary ---
     st.markdown("")
-    step_indicator(4, "Resumen estructurado", done=False)
+    step_indicator(summary_step_num, "Resumen estructurado", done=False)
 
     # Display summary fields in a cleaner layout
     _field_icons = {
@@ -165,25 +240,54 @@ if "current_transcript" in st.session_state:
     # Save button
     st.markdown("")
     st.divider()
+
+    is_updating_existing = (
+        is_append_mode and st.session_state.get("pending_session_id") is not None
+    )
+    save_label = (
+        "💾 Actualizar sesión" if is_updating_existing else "💾 Guardar sesión"
+    )
+
     col_save, col_cancel = st.columns([3, 1])
     with col_save:
-        if st.button("💾 Guardar sesión", type="primary", use_container_width=True):
+        if st.button(save_label, type="primary", use_container_width=True):
             try:
-                with st.spinner("Guardando sesión..."):
-                    save_session(
-                        st.session_state["pending_client_id"],
-                        st.session_state["pending_transcript"],
-                        st.session_state["pending_summary"],
-                    )
-                st.success("Sesión guardada correctamente.")
-                del st.session_state["current_transcript"]
-                del st.session_state["pending_transcript"]
-                del st.session_state["pending_summary"]
-                del st.session_state["pending_client_id"]
+                if is_updating_existing:
+                    with st.spinner("Actualizando sesión..."):
+                        update_session(
+                            st.session_state["pending_session_id"],
+                            st.session_state["pending_transcript"],
+                            st.session_state["pending_summary"],
+                        )
+                    st.success("Sesión actualizada correctamente.")
+                else:
+                    with st.spinner("Guardando sesión..."):
+                        save_session(
+                            st.session_state["pending_client_id"],
+                            st.session_state["pending_transcript"],
+                            st.session_state["pending_summary"],
+                        )
+                    st.success("Sesión guardada correctamente.")
+                for key in [
+                    "current_transcript",
+                    "pending_transcript",
+                    "pending_summary",
+                    "pending_client_id",
+                    "pending_session_id",
+                    "pending_existing_transcript",
+                ]:
+                    st.session_state.pop(key, None)
             except Exception:
-                pass  # Error already shown by save_session
+                pass  # Error already shown by save_session/update_session
     with col_cancel:
         if st.button("Descartar", use_container_width=True):
-            for key in ["current_transcript", "pending_transcript", "pending_summary", "pending_client_id"]:
+            for key in [
+                "current_transcript",
+                "pending_transcript",
+                "pending_summary",
+                "pending_client_id",
+                "pending_session_id",
+                "pending_existing_transcript",
+            ]:
                 st.session_state.pop(key, None)
             st.rerun()
