@@ -1,9 +1,11 @@
 import streamlit as st
+from services.auth import check_password
 from services.database import get_all_clients, add_client, delete_client
 from services.styles import inject_custom_css, render_sidebar_brand, page_header, metric_card
 
 inject_custom_css()
 render_sidebar_brand()
+check_password()
 
 page_header("👥 Clientes", "Administra tu lista de clientes")
 
