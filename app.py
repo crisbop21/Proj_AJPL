@@ -23,7 +23,7 @@ st.markdown(
 st.divider()
 
 # --- Feature cards ---
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown(
@@ -56,6 +56,18 @@ with col3:
             <div class="feature-icon">👥</div>
             <h3>Clientes</h3>
             <p>Administra tu lista de clientes y mantén sus datos organizados.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col4:
+    st.markdown(
+        """
+        <div class="feature-card">
+            <div class="feature-icon">🧭</div>
+            <h3>Asesor</h3>
+            <p>Recibe enfoques, ejercicios y referentes reputables para inspirar tu trabajo.</p>
         </div>
         """,
         unsafe_allow_html=True,
