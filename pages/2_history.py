@@ -1,7 +1,7 @@
 import streamlit as st
 from services.auth import check_password
 from services.database import get_all_clients, get_sessions_for_client, delete_session
-from services.pdf_generator import generate_pdf, generate_resumen_general
+from services.pdf_generator import generate_pdf, generate_report_sections
 from services.styles import inject_custom_css, render_sidebar_brand, page_header, metric_card
 
 inject_custom_css()
@@ -49,67 +49,119 @@ with col3:
 
 st.markdown("")
 
-# --- PDF generation with preview and feedback ---
+# --- PDF generation with editable report form ---
 col_pdf, col_spacer = st.columns([1, 2])
 with col_pdf:
-    if st.button("📄 Generar Reporte PDF", type="primary", use_container_width=True):
+    if st.button("📄 Preparar Reporte PDF", type="primary", use_container_width=True):
         try:
-            with st.spinner("Generando resumen general..."):
-                resumen = generate_resumen_general(sessions)
-            st.session_state["report_resumen"] = resumen
+            with st.spinner("Generando borrador del reporte con IA..."):
+                secciones = generate_report_sections(sessions)
+            # Clear any stale form fields from a previous client/draft
+            for key in ["report_nombre", "report_documento", "report_motivo",
+                        "report_temas", "report_avances", "report_compromisos",
+                        "report_firma", "report_feedback"]:
+                st.session_state.pop(key, None)
+            st.session_state["report_sections"] = secciones
             st.session_state["report_client"] = selected_name
             st.session_state["report_sessions"] = sessions
             st.session_state["report_pdf"] = None
             st.rerun()
         except Exception:
-            st.error("Error al generar el resumen. Por favor intenta de nuevo.")
+            st.error("Error al generar el borrador. Por favor intenta de nuevo.")
 
-# Show preview if a resumen has been generated for this client
-if (st.session_state.get("report_resumen")
+# Show the editable form if a draft has been generated for this client
+if (st.session_state.get("report_sections")
         and st.session_state.get("report_client") == selected_name):
     st.markdown("---")
-    st.subheader("📋 Vista previa del Resumen General")
-    st.markdown(st.session_state["report_resumen"])
+    st.subheader("📋 Revisa y edita el reporte antes de exportar")
+    st.caption("Puedes ajustar cualquier campo. Los textos fueron generados con IA como punto de partida.")
+
+    secciones = st.session_state["report_sections"]
+
+    # Initialize widget-bound keys once so Streamlit doesn't warn about value+key conflict
+    st.session_state.setdefault("report_nombre", selected_name)
+    st.session_state.setdefault("report_documento", "")
+    st.session_state.setdefault("report_motivo", secciones.get("motivo_consulta", ""))
+    st.session_state.setdefault("report_temas", secciones.get("resumen_temas_trabajados", ""))
+    st.session_state.setdefault("report_avances", secciones.get("avances", ""))
+    st.session_state.setdefault("report_compromisos", secciones.get("compromisos_y_recomendaciones", ""))
+    st.session_state.setdefault("report_firma", "")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        nombre_cliente = st.text_input("Nombre del cliente", key="report_nombre")
+    with col_b:
+        documento = st.text_input(
+            "Documento de identidad",
+            key="report_documento",
+            placeholder="Ej: CC 1.234.567",
+        )
+
+    motivo = st.text_area("Motivo de consulta", key="report_motivo", height=90)
+
+    col_n, col_f = st.columns(2)
+    with col_n:
+        st.text_input("Número de sesiones", value=str(len(sessions)), disabled=True)
+    with col_f:
+        st.text_input("Fecha de la última sesión", value=last_date, disabled=True)
+
+    temas = st.text_area("Resumen de temas trabajados", key="report_temas", height=140)
+    avances = st.text_area("Avances", key="report_avances", height=140)
+    compromisos = st.text_area(
+        "Compromisos y recomendaciones", key="report_compromisos", height=140,
+    )
+    firma = st.text_input(
+        "Firma", key="report_firma", placeholder="Ej: Ana Martínez — Coach de Vida",
+    )
 
     feedback = st.text_area(
-        "¿Tienes algún comentario o corrección? (opcional)",
+        "¿Quieres regenerar con la IA? Escribe feedback aquí (opcional)",
         placeholder="Ej: Enfatizar más los avances en autoestima, omitir detalles sobre...",
         key="report_feedback",
     )
 
     col_approve, col_regenerate, col_cancel = st.columns(3)
     with col_approve:
-        if st.button("✅ Aprobar y generar PDF", type="primary", use_container_width=True):
+        if st.button("✅ Generar PDF", type="primary", use_container_width=True):
             try:
                 with st.spinner("Generando PDF final..."):
                     pdf_bytes = generate_pdf(
-                        selected_name,
-                        st.session_state["report_sessions"],
-                        resumen_general=st.session_state["report_resumen"],
+                        client_name=nombre_cliente,
+                        sessions=st.session_state["report_sessions"],
+                        documento_identidad=documento,
+                        motivo_consulta=motivo,
+                        resumen_temas_trabajados=temas,
+                        avances=avances,
+                        compromisos_y_recomendaciones=compromisos,
+                        firma=firma,
                     )
                 st.session_state["report_pdf"] = pdf_bytes
             except Exception:
                 st.error("Error al generar el PDF. Por favor intenta de nuevo.")
 
     with col_regenerate:
-        if st.button("🔄 Regenerar con feedback", use_container_width=True):
+        if st.button("🔄 Regenerar con IA", use_container_width=True):
             if not feedback:
                 st.warning("Escribe tu feedback antes de regenerar.")
             else:
                 try:
-                    with st.spinner("Regenerando resumen con tu feedback..."):
-                        new_resumen = generate_resumen_general(
+                    with st.spinner("Regenerando con tu feedback..."):
+                        nuevas = generate_report_sections(
                             st.session_state["report_sessions"],
                             feedback=feedback,
                         )
-                    st.session_state["report_resumen"] = new_resumen
+                    st.session_state["report_sections"] = nuevas
+                    for key in ["report_motivo", "report_temas", "report_avances", "report_compromisos"]:
+                        st.session_state.pop(key, None)
                     st.rerun()
                 except Exception:
-                    st.error("Error al regenerar el resumen. Por favor intenta de nuevo.")
+                    st.error("Error al regenerar. Por favor intenta de nuevo.")
 
     with col_cancel:
         if st.button("❌ Cancelar", use_container_width=True):
-            for key in ["report_resumen", "report_client", "report_sessions", "report_pdf"]:
+            for key in ["report_sections", "report_client", "report_sessions", "report_pdf",
+                        "report_nombre", "report_documento", "report_motivo", "report_temas",
+                        "report_avances", "report_compromisos", "report_firma", "report_feedback"]:
                 st.session_state.pop(key, None)
             st.rerun()
 
