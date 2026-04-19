@@ -1,6 +1,6 @@
 import streamlit as st
 from services.auth import check_password
-from services.database import get_all_clients, get_sessions_for_client
+from services.database import get_all_clients, get_sessions_for_client, delete_session
 from services.pdf_generator import generate_pdf, generate_resumen_general
 from services.styles import inject_custom_css, render_sidebar_brand, page_header, metric_card
 
@@ -182,3 +182,48 @@ for session in sessions:
                 st.markdown(f"**{icon} {field_label}:**")
                 for item in value:
                     st.markdown(f"- {item}")
+
+        # --- Delete session ---
+        st.divider()
+        session_id = session.get("id")
+        confirm_key = f"confirm_delete_{session_id}"
+
+        if st.session_state.get(confirm_key):
+            st.warning(
+                f"¿Seguro que deseas eliminar la Sesión {session_num}? "
+                "Esta acción no se puede deshacer."
+            )
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button(
+                    "Sí, eliminar",
+                    key=f"confirm_yes_{session_id}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    try:
+                        delete_session(session_id)
+                        st.session_state.pop(confirm_key, None)
+                        for key in ["report_resumen", "report_client",
+                                    "report_sessions", "report_pdf"]:
+                            st.session_state.pop(key, None)
+                        st.success(f"Sesión {session_num} eliminada.")
+                        st.rerun()
+                    except Exception:
+                        st.session_state.pop(confirm_key, None)
+            with col_no:
+                if st.button(
+                    "Cancelar",
+                    key=f"confirm_no_{session_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state.pop(confirm_key, None)
+                    st.rerun()
+        else:
+            if st.button(
+                "🗑️ Eliminar sesión",
+                key=f"delete_{session_id}",
+                use_container_width=True,
+            ):
+                st.session_state[confirm_key] = True
+                st.rerun()
