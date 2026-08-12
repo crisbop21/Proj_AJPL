@@ -1,12 +1,10 @@
 import streamlit as st
-from services.auth import check_password
 from services.database import get_all_clients, get_sessions_for_client
 from services.advisor import generate_advice
 from services.styles import inject_custom_css, render_sidebar_brand, page_header
 
 inject_custom_css()
 render_sidebar_brand()
-check_password()
 
 page_header("🧭 Asesor", "Insights y referentes para inspirar tu trabajo con cada cliente")
 
