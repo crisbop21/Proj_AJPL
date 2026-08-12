@@ -1,12 +1,10 @@
 import streamlit as st
-from services.auth import check_password
 from services.database import get_all_clients, get_sessions_for_client, delete_session
 from services.pdf_generator import generate_pdf, generate_report_sections
 from services.styles import inject_custom_css, render_sidebar_brand, page_header, metric_card
 
 inject_custom_css()
 render_sidebar_brand()
-check_password()
 
 page_header("📋 Historial", "Consulta sesiones anteriores y genera reportes")
 

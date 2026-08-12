@@ -2,12 +2,10 @@ import streamlit as st
 
 st.set_page_config(page_title="Coach Notes", page_icon="🎙️", layout="wide")
 
-from services.auth import check_password
 from services.styles import inject_custom_css, render_sidebar_brand
 
 inject_custom_css()
 render_sidebar_brand()
-check_password()
 
 # --- Hero section ---
 st.markdown(

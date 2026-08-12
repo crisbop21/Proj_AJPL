@@ -3,7 +3,6 @@ import os
 import streamlit as st
 from pydub import AudioSegment
 from io import BytesIO
-from services.auth import check_password
 from services.database import (
     get_all_clients,
     save_session,
@@ -16,7 +15,6 @@ from services.styles import inject_custom_css, render_sidebar_brand, step_indica
 
 inject_custom_css()
 render_sidebar_brand()
-check_password()
 
 page_header("🎤 Nueva Sesión", "Graba, transcribe y estructura tus notas de coaching")
 
