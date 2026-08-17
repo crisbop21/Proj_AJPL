@@ -34,8 +34,8 @@ def structure_notes(transcript: str) -> dict:
     try:
         client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
+            model="claude-sonnet-5",
+            max_tokens=4096,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": transcript}],
         )
@@ -45,8 +45,8 @@ def structure_notes(transcript: str) -> dict:
         # Retry asking Claude to fix the JSON
         try:
             retry_response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2048,
+                model="claude-sonnet-5",
+                max_tokens=4096,
                 system="Devuelve ÚNICAMENTE un objeto JSON válido. Sin texto adicional. Sin bloques de código.",
                 messages=[
                     {"role": "user", "content": f"Corrige este JSON:\n{text}"},
@@ -60,6 +60,17 @@ def structure_notes(transcript: str) -> dict:
         st.error("Error al estructurar las notas: La clave API de Anthropic es inválida. "
                  "Por favor verifica tu ANTHROPIC_API_KEY en la configuración de secrets.")
         raise
-    except Exception as e:
-        st.error(f"Error al estructurar las notas. Por favor intenta de nuevo.")
+    except anthropic.NotFoundError:
+        st.error("Error al estructurar las notas: El modelo de Claude configurado ya no está "
+                 "disponible. La aplicación necesita actualizarse a un modelo vigente.")
+        raise
+    except anthropic.RateLimitError:
+        st.error("Error al estructurar las notas: Se alcanzó el límite de uso de la API de Claude. "
+                 "Por favor espera un momento e intenta de nuevo.")
+        raise
+    except anthropic.APIStatusError as e:
+        st.error(f"Error al estructurar las notas (código {e.status_code}). Por favor intenta de nuevo.")
+        raise
+    except Exception:
+        st.error("Error al estructurar las notas. Por favor intenta de nuevo.")
         raise

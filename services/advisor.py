@@ -68,8 +68,8 @@ def generate_advice(client_name: str, sessions: list[dict], focus: str = "") -> 
     try:
         client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=3000,
+            model="claude-sonnet-5",
+            max_tokens=6000,
             system=ADVISOR_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_msg}],
         )

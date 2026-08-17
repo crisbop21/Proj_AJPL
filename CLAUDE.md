@@ -135,7 +135,7 @@ The audio file must be WAV format. Use pydub to export if needed before calling 
 
 ### services/structuring.py
 
-Calls Claude with a strict Spanish system prompt and returns parsed JSON. Always use `claude-sonnet-4-20250514`. The response must be parsed with `json.loads`. Wrap in try/except and if parsing fails, make a follow-up call asking Claude to return only valid JSON.
+Calls Claude with a strict Spanish system prompt and returns parsed JSON. Always use `claude-sonnet-5`. The response must be parsed with `json.loads`. Wrap in try/except and if parsing fails, make a follow-up call asking Claude to return only valid JSON.
 
 System prompt to use verbatim:
 
