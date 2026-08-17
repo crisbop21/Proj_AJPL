@@ -93,8 +93,8 @@ def generate_report_sections(sessions: list[dict], feedback: str = "") -> dict:
     try:
         client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
+            model="claude-sonnet-5",
+            max_tokens=4096,
             system=system_prompt,
             messages=[{"role": "user", "content": summaries_text or "(sin sesiones)"}],
         )

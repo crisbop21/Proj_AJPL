@@ -11,7 +11,7 @@ A personal tool for a life coach to record voice notes in Spanish after client s
 | Frontend | Streamlit (Python) |
 | Voice Recording | streamlit-audiorecorder |
 | Speech to Text | ElevenLabs Scribe v2 |
-| AI Structuring | Anthropic Claude (claude-sonnet-4-20250514) |
+| AI Structuring | Anthropic Claude (claude-sonnet-5) |
 | Database | Supabase (PostgreSQL) |
 | PDF Generation | ReportLab |
 | Deployment | Streamlit Community Cloud |

@@ -68,7 +68,7 @@ class TestStructureNotes:
         structure_notes("test")
 
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs["model"] == "claude-sonnet-4-20250514"
+        assert call_kwargs["model"] == "claude-sonnet-5"
 
     @patch("services.structuring.anthropic.Anthropic")
     def test_uses_api_key_from_secrets(self, mock_anthropic_cls, sample_structured_summary):
